@@ -1,0 +1,44 @@
+{
+  "tenant": {
+    "name": "contoso-local",
+    "simulated": true
+  },
+  "users": [
+    {"id": "u-alice", "name": "Alice", "upn": "alice@contoso-local.example"},
+    {"id": "u-bob", "name": "Bob", "upn": "bob@contoso-local.example"},
+    {"id": "u-carol", "name": "Carol", "upn": "carol@contoso-local.example"}
+  ],
+  "groups": [
+    {"id": "g-ops", "name": "Ops-Team", "members": ["u-bob"]}
+  ],
+  "roleDefinitions": {
+    "Owner": ["read", "start", "stop", "deallocate", "assignRoles"],
+    "Contributor": ["read", "start", "stop", "deallocate"],
+    "Reader": ["read"]
+  },
+  "roleAssignments": [
+    {"principal": "u-alice", "role": "Owner", "scope": "/subscriptions/sub-prod"},
+    {"principal": "g-ops", "role": "Contributor", "scope": "/subscriptions/sub-prod/resourceGroups/rg-web"},
+    {"principal": "u-carol", "role": "Reader", "scope": "/subscriptions/sub-prod"}
+  ],
+  "vms": [
+    {
+      "name": "vm-web-01",
+      "subscription": "sub-prod",
+      "resourceGroup": "rg-web",
+      "size": "Standard_B2s",
+      "powerState": "running",
+      "hourlyRate": 0.0416,
+      "tags": {"costCenter": "CC-1001", "environment": "prod"}
+    },
+    {
+      "name": "vm-db-01",
+      "subscription": "sub-prod",
+      "resourceGroup": "rg-data",
+      "size": "Standard_D2s_v3",
+      "powerState": "deallocated",
+      "hourlyRate": 0.096,
+      "tags": {"costCenter": "CC-2002", "environment": "prod"}
+    }
+  ]
+}

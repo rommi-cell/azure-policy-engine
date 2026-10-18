@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Azure Policy Engine (Local Simulation)</title>
+  <style>
+    body { font-family: Segoe UI, Arial, sans-serif; margin: 0; background: #f4f6f9; color: #222; }
+    header { background: #0b5ed7; color: #fff; padding: 16px 24px; }
+    header p { margin: 4px 0 0; font-size: 13px; opacity: 0.9; }
+    main { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+    .card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    textarea { width: 100%; height: 200px; font-family: Consolas, monospace; font-size: 13px; box-sizing: border-box; padding: 10px; border: 1px solid #ccc; border-radius: 6px; }
+    button { background: #0b5ed7; color: #fff; border: none; padding: 10px 18px; border-radius: 6px; font-size: 15px; cursor: pointer; margin-top: 10px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px; border-bottom: 1px solid #eee; font-size: 14px; }
+    .badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+    .Compliant { background: #d1e7dd; color: #0f5132; }
+    .NonCompliant { background: #f8d7da; color: #842029; }
+    .Modified { background: #fff3cd; color: #664d03; }
+    .error { color: #842029; background: #f8d7da; padding: 10px; border-radius: 6px; }
+    @media (max-width: 600px) { th, td { font-size: 12px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Azure Policy Engine</h1>
+    <p>Local simulation of Azure Policy evaluation. Nothing is deployed to Azure.</p>
+  </header>
+  <main>
+    <div class="card">
+      <form method="post" action="/evaluate">
+        <label for="resource"><strong>Resource template (JSON)</strong></label>
+        <textarea id="resource" name="resource">{{ resource_text }}</textarea>
+        <button type="submit">Evaluate</button>
+      </form>
+      {% if error %}
+        <p class="error">{{ error }}</p>
+      {% endif %}
+    </div>
+
+    {% if result %}
+    <div class="card">
+      <h2>Compliance results</h2>
+      <table>
+        <tr><th>Policy</th><th>Effect</th><th>Status</th></tr>
+        {% for r in result.results %}
+        <tr>
+          <td>{{ r.displayName }}</td>
+          <td>{{ r.effect }}</td>
+          <td><span class="badge {{ r.status }}">{{ r.status }}</span></td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+    <div class="card">
+      <h2>Resource after Modify effects</h2>
+      <pre>{{ result.resource | tojson(indent=2) }}</pre>
+    </div>
+    {% endif %}
+  </main>
+</body>
+</html>

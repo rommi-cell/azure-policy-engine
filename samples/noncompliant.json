@@ -1,0 +1,11 @@
+{
+  "name": "stnoncompliant001",
+  "type": "Microsoft.Storage/storageAccounts",
+  "location": "japanwest",
+  "tags": {
+    "environment": "dev"
+  },
+  "properties": {
+    "supportsHttpsTrafficOnly": false
+  }
+}

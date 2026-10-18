@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Azure Lab (Local Simulation)</title>
+  <style>
+    body { font-family: Segoe UI, Arial, sans-serif; margin: 0; background: #f4f6f9; color: #222; }
+    header { background: #0b5ed7; color: #fff; padding: 16px 24px; }
+    header p { margin: 4px 0 0; font-size: 13px; opacity: 0.9; }
+    main { max-width: 900px; margin: 24px auto; padding: 0 16px; }
+    .card { background: #fff; border-radius: 8px; padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; }
+    select, button { padding: 8px 12px; border-radius: 6px; border: 1px solid #ccc; font-size: 14px; margin: 4px; }
+    button { background: #0b5ed7; color: #fff; border: none; cursor: pointer; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 8px; border-bottom: 1px solid #eee; font-size: 14px; }
+    .msg { padding: 10px; border-radius: 6px; margin-bottom: 12px; }
+    .ok { background: #d1e7dd; color: #0f5132; }
+    .deny { background: #f8d7da; color: #842029; }
+    .Allowed { color: #0f5132; font-weight: 600; }
+    .Denied { color: #842029; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Azure Lab (Local Simulation)</h1>
+    <p>Simulated Entra ID users, RBAC, and virtual machines. Nothing is connected to Azure.</p>
+  </header>
+  <main>
+    {% if message %}
+    <div class="msg {{ 'ok' if allowed else 'deny' }}">{{ message }}</div>
+    {% endif %}
+
+    <div class="card">
+      <h2>Perform a VM action</h2>
+      <form method="post" action="/lab/action">
+        <label>User
+          <select name="user">
+            {% for u in users %}
+            <option value="{{ u.id }}">{{ u.name }} ({{ u.id }})</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>VM
+          <select name="vm">
+            {% for vm in vms %}
+            <option value="{{ vm.name }}">{{ vm.name }} ({{ vm.powerState }})</option>
+            {% endfor %}
+          </select>
+        </label>
+        <label>Action
+          <select name="action">
+            <option value="start">start</option>
+            <option value="stop">stop</option>
+            <option value="deallocate">deallocate</option>
+          </select>
+        </label>
+        <button type="submit">Run action</button>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Virtual machines</h2>
+      <table>
+        <tr><th>Name</th><th>Resource group</th><th>Size</th><th>State</th><th>Cost center</th></tr>
+        {% for vm in vms %}
+        <tr>
+          <td>{{ vm.name }}</td>
+          <td>{{ vm.resourceGroup }}</td>
+          <td>{{ vm.size }}</td>
+          <td>{{ vm.powerState }}</td>
+          <td>{{ vm.tags.costCenter }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+
+    <div class="card">
+      <h2>Activity log (latest 10)</h2>
+      <table>
+        <tr><th>Time (UTC)</th><th>User</th><th>Action</th><th>Target</th><th>Result</th></tr>
+        {% for e in logs %}
+        <tr>
+          <td>{{ e.time }}</td>
+          <td>{{ e.user }}</td>
+          <td>{{ e.action }}</td>
+          <td>{{ e.target }}</td>
+          <td class="{{ e.result }}">{{ e.result }}</td>
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+  </main>
+</body>
+</html>

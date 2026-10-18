@@ -1,0 +1,12 @@
+{
+  "name": "stcompliant001",
+  "type": "Microsoft.Storage/storageAccounts",
+  "location": "eastus",
+  "tags": {
+    "costCenter": "CC-1001",
+    "environment": "prod"
+  },
+  "properties": {
+    "supportsHttpsTrafficOnly": true
+  }
+}

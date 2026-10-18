@@ -1,0 +1,49 @@
+{
+  "policies": [
+    {
+      "name": "allowedLocations",
+      "displayName": "Allowed locations",
+      "effect": "Deny",
+      "description": "Resources must be deployed only to approved regions.",
+      "rule": {
+        "field": "location",
+        "operator": "in",
+        "values": ["eastus", "westeurope", "centralindia"]
+      }
+    },
+    {
+      "name": "requireCostCenterTag",
+      "displayName": "Require costCenter tag",
+      "effect": "Deny",
+      "description": "Resources must have a costCenter tag.",
+      "rule": {
+        "field": "tags.costCenter",
+        "operator": "exists",
+        "values": []
+      }
+    },
+    {
+      "name": "auditStorageHttps",
+      "displayName": "Audit storage accounts without HTTPS-only",
+      "effect": "Audit",
+      "description": "Storage accounts should require secure transfer (HTTPS).",
+      "rule": {
+        "field": "properties.supportsHttpsTrafficOnly",
+        "operator": "equals",
+        "values": [true]
+      }
+    },
+    {
+      "name": "modifyAddEnvironmentTag",
+      "displayName": "Add default environment tag",
+      "effect": "Modify",
+      "description": "Adds an environment tag with a default value when it is missing.",
+      "rule": {
+        "field": "tags.environment",
+        "operator": "exists",
+        "values": []
+      },
+      "modifyValue": "dev"
+    }
+  ]
+}
