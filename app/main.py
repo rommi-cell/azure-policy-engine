@@ -5,16 +5,27 @@ from fastapi.templating import Jinja2Templates
 
 # Local Module Imports
 from app.engine import load_policies, evaluate_resource
-from app.rbac import load_tenant, check_access
+from app.rbac import load_tenant
 from app.vm import perform_action
-from app.activity_log import record, list_recent
+from app.storage import (
+    initialize_database,
+    get_connection,
+    load_vms,
+    save_vm_power_state,
+    record_activity,
+    list_activity,
+    dashboard_summary,
+)
 
 app = FastAPI(title="Azure Policy Engine (Local Simulation)")
 templates = Jinja2Templates(directory="app/templates")
 
+# Ensure database schema is created and seeded on startup
+initialize_database()
+
 
 # -----------------------------------------------------------------------------
-# Policy Engine Routes
+# Policy Engine Routes (Phase 1)
 # -----------------------------------------------------------------------------
 
 @app.get("/", response_class=HTMLResponse)
@@ -47,19 +58,26 @@ async def evaluate(request: Request):
 
 
 # -----------------------------------------------------------------------------
-# RBAC & VM Lab Simulation Routes
+# RBAC & VM Lab Simulation Routes (Database-backed)
 # -----------------------------------------------------------------------------
 
 @app.get("/lab", response_class=HTMLResponse)
 def lab(request: Request):
     tenant = load_tenant()
+    conn = get_connection()
+    try:
+        vms = load_vms(conn)
+        logs = list_activity(conn, limit=10)
+    finally:
+        conn.close()
+
     return templates.TemplateResponse(
         request,
         "lab.html",
         {
             "users": tenant["users"],
-            "vms": tenant["vms"],
-            "logs": list_recent(10),
+            "vms": vms,
+            "logs": logs,
             "message": None,
         },
     )
@@ -72,18 +90,52 @@ async def lab_action(request: Request):
     vm_name = form.get("vm")
     action = form.get("action")
 
-    tenant = load_tenant()
-    result = perform_action(tenant, user_id, vm_name, action)
-    record(user_id, action, vm_name, result["allowed"], result["message"])
+    conn = get_connection()
+    try:
+        tenant = load_tenant()
+        tenant["vms"] = load_vms(conn)
+
+        result = perform_action(tenant, user_id, vm_name, action)
+
+        if result["allowed"]:
+            updated_vm = next((v for v in tenant["vms"] if v["name"] == vm_name), None)
+            if updated_vm:
+                save_vm_power_state(conn, vm_name, updated_vm["powerState"])
+
+        record_activity(conn, user_id, action, vm_name, result["allowed"], result["message"])
+
+        vms = load_vms(conn)
+        logs = list_activity(conn, limit=10)
+    finally:
+        conn.close()
 
     return templates.TemplateResponse(
         request,
         "lab.html",
         {
             "users": tenant["users"],
-            "vms": tenant["vms"],
-            "logs": list_recent(10),
+            "vms": vms,
+            "logs": logs,
             "message": result["message"],
             "allowed": result["allowed"],
         },
+    )
+
+
+# -----------------------------------------------------------------------------
+# Dashboard Route
+# -----------------------------------------------------------------------------
+
+@app.get("/dashboard", response_class=HTMLResponse)
+def dashboard(request: Request):
+    conn = get_connection()
+    try:
+        summary = dashboard_summary(conn)
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(
+        request, 
+        "dashboard.html", 
+        {"summary": summary}
     )

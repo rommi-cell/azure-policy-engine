@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block heading %}Dashboard{% endblock %}
+{% set active = "dashboard" %}
+
+{% block content %}
+  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:16px; margin-bottom:20px;">
+    <div class="card"><div class="muted">Virtual machines</div><div style="font-size:28px; font-weight:700;">{{ summary.total_vms }}</div></div>
+    <div class="card"><div class="muted">Running</div><div style="font-size:28px; font-weight:700;">{{ summary.vms_by_state.get('running', 0) }}</div></div>
+    <div class="card"><div class="muted">Storage accounts</div><div style="font-size:28px; font-weight:700;">{{ summary.storage_accounts }}</div></div>
+    <div class="card"><div class="muted">Containers / files</div><div style="font-size:28px; font-weight:700;">{{ summary.containers }} / {{ summary.files }}</div></div>
+  </div>
+
+  <div class="card">
+    <h2>VMs by power state</h2>
+    {% for state, count in summary.vms_by_state.items() %}
+    <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+      <div style="width:120px; font-size:14px;">{{ state }}</div>
+      <div style="flex:1; background:#eef2f7; border-radius:6px; height:18px;">
+        <div style="width: {{ (count / summary.total_vms * 100) | round(0) }}%; background: var(--blue); height:18px; border-radius:6px;"></div>
+      </div>
+      <div style="width:30px; text-align:right; font-size:14px;">{{ count }}</div>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="card">
+    <h2>Recent activity</h2>
+    <table>
+      <tr><th>Time (UTC)</th><th>User</th><th>Action</th><th>Target</th><th>Result</th></tr>
+      {% for e in summary.recent_activity %}
+      <tr>
+        <td>{{ e.time }}</td>
+        <td>{{ e.user }}</td>
+        <td>{{ e.action }}</td>
+        <td>{{ e.target }}</td>
+        <td><span class="badge {{ 'ok' if e.result == 'Allowed' else 'bad' }}">{{ e.result }}</span></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+{% endblock %}

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}Azure AdminLab{% endblock %}</title>
+  <style>
+    :root {
+      --blue: #0b5ed7;
+      --ink: #1b1f24;
+      --muted: #5f6b7a;
+      --line: #e3e8ef;
+      --bg: #f4f6f9;
+      --ok-bg: #d1e7dd; --ok-ink: #0f5132;
+      --bad-bg: #f8d7da; --bad-ink: #842029;
+      --warn-bg: #fff3cd; --warn-ink: #664d03;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; background: var(--bg); color: var(--ink); display: flex; min-height: 100vh; }
+    nav.sidebar { width: 220px; background: #111827; color: #e5e7eb; padding: 20px 0; flex-shrink: 0; }
+    nav.sidebar .brand { font-weight: 700; padding: 0 20px 20px; font-size: 16px; }
+    nav.sidebar a { display: block; padding: 10px 20px; color: #cbd5e1; text-decoration: none; font-size: 14px; }
+    nav.sidebar a:hover, nav.sidebar a.active { background: #1f2937; color: #fff; }
+    .main { flex: 1; min-width: 0; }
+    .topbar { background: #fff; border-bottom: 1px solid var(--line); padding: 14px 28px; }
+    .topbar h1 { margin: 0; font-size: 20px; }
+    .topbar p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+    .content { padding: 24px 28px; max-width: 1100px; }
+    .card { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+    .card h2 { margin: 0 0 14px; font-size: 17px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--line); }
+    th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+    .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+    .badge.ok { background: var(--ok-bg); color: var(--ok-ink); }
+    .badge.bad { background: var(--bad-bg); color: var(--bad-ink); }
+    .badge.warn { background: var(--warn-bg); color: var(--warn-ink); }
+    .badge.info { background: #e0ecff; color: #1d4ed8; }
+    .btn { background: var(--blue); color: #fff; border: none; padding: 8px 16px; border-radius: 6px; font-size: 14px; cursor: pointer; }
+    .btn:hover { background: #0a4fb3; }
+    .btn.danger { background: #b42318; }
+    select, input, textarea { padding: 7px 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
+    button:focus, a:focus, select:focus, input:focus { outline: 3px solid #93c5fd; outline-offset: 2px; }
+    .notice { padding: 12px 14px; border-radius: 6px; margin-bottom: 16px; font-size: 14px; }
+    .notice.ok { background: var(--ok-bg); color: var(--ok-ink); }
+    .notice.bad { background: var(--bad-bg); color: var(--bad-ink); }
+    .notice.info { background: #e0ecff; color: #1d4ed8; }
+    .muted { color: var(--muted); font-size: 13px; }
+    @media (max-width: 760px) {
+      body { flex-direction: column; }
+      nav.sidebar { width: 100%; padding: 10px 0; }
+      .content { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="sidebar">
+    <div class="brand">Azure AdminLab</div>
+    <a href="/dashboard" class="{% if active == 'dashboard' %}active{% endif %}">Dashboard</a>
+    <a href="/" class="{% if active == 'policy' %}active{% endif %}">Policy Engine</a>
+    <a href="/lab" class="{% if active == 'lab' %}active{% endif %}">VM and Access Lab</a>
+  </nav>
+  <div class="main">
+    <div class="topbar">
+      <h1>{% block heading %}{% endblock %}</h1>
+      <p>Local simulation of Azure concepts. Nothing is connected to or deployed to Azure.</p>
+    </div>
+    <div class="content">
+      {% block content %}{% endblock %}
+    </div>
+  </div>
+</body>
+</html>
