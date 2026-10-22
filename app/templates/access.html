@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Identity and Access{% endblock %}
+{% block heading %}Identity and Access{% endblock %}
+{% set active = "access" %}
+
+{% block content %}
+  <div class="card">
+    <h2>Access check</h2>
+    <p class="muted">Choose a user and a resource scope. The simulator checks role assignments, including group membership and scope inheritance, and explains the decision.</p>
+    <form method="get" action="/access">
+      <label>User
+        <select name="user">
+          {% for u in users %}
+          <option value="{{ u.id }}" {{ 'selected' if u.id == selected_user }}>{{ u.name }} ({{ u.id }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Action
+        <select name="action">
+          {% for a in actions %}
+          <option value="{{ a }}" {{ 'selected' if a == selected_action }}>{{ a }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Resource scope
+        <select name="scope">
+          {% for s in scopes %}
+          <option value="{{ s.value }}" {{ 'selected' if s.value == selected_scope }}>{{ s.label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <button class="btn" type="submit">Check access</button>
+    </form>
+  </div>
+
+  {% if decision %}
+  <div class="card">
+    <h2>Decision</h2>
+    <span class="badge {{ 'ok' if decision.allowed else 'bad' }}">{{ 'Allowed' if decision.allowed else 'Denied' }}</span>
+    <p>{{ decision.explanation }}</p>
+    {% if decision.reasons %}
+    <table>
+      <tr><th>Role assignment that applied</th></tr>
+      {% for r in decision.reasons %}
+      <tr><td>{{ r }}</td></tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p class="muted">No role assignment grants this action at this scope, so access is denied by default.</p>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <h2>Role definitions</h2>
+    <table>
+      <tr><th>Role</th><th>Allowed actions</th></tr>
+      {% for name, acts in roles.items() %}
+      <tr><td>{{ name }}</td><td>{{ acts | join(", ") }}</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+{% endblock %}

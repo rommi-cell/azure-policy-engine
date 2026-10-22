@@ -1,17 +1,32 @@
 {% extends "base.html" %}
-{% block title %}Policy Engine{% endblock %}
-{% block heading %}Policy Engine{% endblock %}
+{% block title %}Governance{% endblock %}
+{% block heading %}Governance and Compliance{% endblock %}
 {% set active = "policy" %}
 
 {% block content %}
+  <div class="card">
+    <h2>Policy definitions</h2>
+    <p class="muted">Simulated Azure Policy definitions loaded from policies/policies.json. Deny blocks non-compliant resources, Audit flags them, and Modify changes them automatically.</p>
+    <table>
+      <tr><th>Policy</th><th>Effect</th><th>Description</th></tr>
+      {% for p in policies %}
+      <tr>
+        <td>{{ p.displayName }}</td>
+        <td><span class="badge {{ 'bad' if p.effect == 'Deny' else ('warn' if p.effect == 'Modify' else 'info') }}">{{ p.effect }}</span></td>
+        <td>{{ p.description }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
   {% if error %}
     <div class="notice bad">{{ error }}</div>
   {% endif %}
 
   <div class="card">
-    <h2>Resource template (JSON)</h2>
+    <h2>Evaluate a resource</h2>
     <form method="post" action="/evaluate">
-      <textarea id="resource" name="resource" rows="12" style="width:100%; font-family: Consolas, monospace; font-size: 13px;">{{ resource_text }}</textarea>
+      <textarea name="resource" rows="12" style="width:100%; font-family: Consolas, monospace; font-size: 13px;">{{ resource_text }}</textarea>
       <div style="margin-top: 12px;">
         <button class="btn" type="submit">Evaluate</button>
       </div>

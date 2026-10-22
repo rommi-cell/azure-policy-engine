@@ -5,7 +5,7 @@ from fastapi.templating import Jinja2Templates
 
 # Local Module Imports
 from app.engine import load_policies, evaluate_resource
-from app.rbac import load_tenant
+from app.rbac import load_tenant, check_access, expand_principals
 from app.vm import perform_action
 from app.storage import (
     initialize_database,
@@ -31,9 +31,14 @@ initialize_database()
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request):
     return templates.TemplateResponse(
-        request, 
-        "index.html", 
-        {"result": None, "resource_text": ""}
+        request,
+        "index.html",
+        {
+            "policies": load_policies(),
+            "result": None,
+            "resource_text": "",
+            "error": None,
+        },
     )
 
 
@@ -41,10 +46,11 @@ def index(request: Request):
 async def evaluate(request: Request):
     form = await request.form()
     resource_text = form.get("resource", "")
-    
+    policies = load_policies()
+
     try:
         resource = json.loads(resource_text)
-        result = evaluate_resource(resource, load_policies())
+        result = evaluate_resource(resource, policies)
         error = None
     except json.JSONDecodeError as exc:
         result = None
@@ -53,7 +59,12 @@ async def evaluate(request: Request):
     return templates.TemplateResponse(
         request,
         "index.html",
-        {"result": result, "error": error, "resource_text": resource_text},
+        {
+            "policies": policies,
+            "result": result,
+            "error": error,
+            "resource_text": resource_text,
+        },
     )
 
 
@@ -102,7 +113,9 @@ async def lab_action(request: Request):
             if updated_vm:
                 save_vm_power_state(conn, vm_name, updated_vm["powerState"])
 
-        record_activity(conn, user_id, action, vm_name, result["allowed"], result["message"])
+        record_activity(
+            conn, user_id, action, vm_name, result["allowed"], result["message"]
+        )
 
         vms = load_vms(conn)
         logs = list_activity(conn, limit=10)
@@ -135,7 +148,50 @@ def dashboard(request: Request):
         conn.close()
 
     return templates.TemplateResponse(
-        request, 
-        "dashboard.html", 
-        {"summary": summary}
+        request,
+        "dashboard.html",
+        {"summary": summary},
+    )
+
+
+# -----------------------------------------------------------------------------
+# Identity and Access Route
+# -----------------------------------------------------------------------------
+
+ACCESS_ACTIONS = ["read", "start", "stop", "deallocate", "assignRoles"]
+ACCESS_SCOPES = [
+    {"value": "/subscriptions/sub-prod", "label": "Subscription sub-prod"},
+    {"value": "/subscriptions/sub-prod/resourceGroups/rg-web", "label": "Resource group rg-web"},
+    {"value": "/subscriptions/sub-prod/resourceGroups/rg-data", "label": "Resource group rg-data"},
+]
+
+
+@app.get("/access", response_class=HTMLResponse)
+def access(request: Request, user: str = "", action: str = "read", scope: str = ACCESS_SCOPES[1]["value"]):
+    tenant = load_tenant()
+    decision = None
+    if user:
+        allowed, reasons = check_access(tenant, user, action, scope)
+        groups = sorted(expand_principals(tenant, user) - {user})
+        if allowed:
+            explanation = f"{user} may perform '{action}' at this scope."
+        else:
+            explanation = f"{user} may not perform '{action}' at this scope."
+        if groups:
+            explanation += f" Group memberships considered: {', '.join(groups)}."
+        decision = {"allowed": allowed, "reasons": reasons, "explanation": explanation}
+
+    return templates.TemplateResponse(
+        request,
+        "access.html",
+        {
+            "users": tenant["users"],
+            "roles": tenant["roleDefinitions"],
+            "actions": ACCESS_ACTIONS,
+            "scopes": ACCESS_SCOPES,
+            "selected_user": user or tenant["users"][0]["id"],
+            "selected_action": action,
+            "selected_scope": scope,
+            "decision": decision,
+        },
     )
