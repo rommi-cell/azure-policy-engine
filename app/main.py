@@ -1,6 +1,6 @@
 import json
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 # Local Module Imports
@@ -15,6 +15,7 @@ from app.storage import (
     record_activity,
     list_activity,
     dashboard_summary,
+    reset_demo_data,
 )
 
 app = FastAPI(title="Azure Policy Engine (Local Simulation)")
@@ -195,3 +196,17 @@ def access(request: Request, user: str = "", action: str = "read", scope: str = 
             "decision": decision,
         },
     )
+
+
+# -----------------------------------------------------------------------------
+# Reset Demo Data
+# -----------------------------------------------------------------------------
+
+@app.post("/reset")
+def reset(request: Request):
+    conn = get_connection()
+    try:
+        reset_demo_data(conn)
+    finally:
+        conn.close()
+    return RedirectResponse(url="/dashboard", status_code=303)

@@ -275,3 +275,31 @@ def dashboard_summary(conn):
         "files": files,
         "recent_activity": list_activity(conn, 5),
     }
+
+
+def reset_demo_data(conn, upload_dir=UPLOAD_DIR):
+    """Restore the public demo to its original sample state.
+
+    Clears runtime data (uploads, container and file metadata, activity) and
+    reloads VM states from tenant.json. Storage accounts created by visitors
+    are removed; the demo storage account is recreated.
+    """
+    conn.execute("DELETE FROM blobs")
+    conn.execute("DELETE FROM containers")
+    conn.execute("DELETE FROM storage_accounts")
+    conn.commit()
+
+    # Remove uploaded files from disk so metadata and files stay in sync.
+    if upload_dir.exists():
+        for path in sorted(upload_dir.rglob("*"), reverse=True):
+            if path.is_file():
+                path.unlink()
+            elif path.is_dir():
+                path.rmdir()
+
+    # Restore the seed VMs and clear the activity log.
+    seed_database(conn)
+
+    # Recreate the demo storage account and container.
+    create_storage_account(conn, "stdemo001", "rg-web")
+    create_container(conn, "stdemo001", "uploads")

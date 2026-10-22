@@ -39,4 +39,12 @@
       {% endfor %}
     </table>
   </div>
+
+  <div class="card">
+    <h2>Public demo environment</h2>
+    <p class="muted">This is a shared demonstration. Everyone who visits sees the same data, so do not enter real or sensitive information. Data may also reset when the server restarts.</p>
+    <form method="post" action="/reset" onsubmit="return confirm('Reset all demo data to the original sample state? Uploaded files, storage accounts, and activity history will be deleted.');">
+      <button class="btn danger" type="submit">Reset Demo Data</button>
+    </form>
+  </div>
 {% endblock %}
