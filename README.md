@@ -1,67 +1,90 @@
+# Azure AdminLab: Interactive AZ-104 Cloud Administration Simulator
 
-## AZ-104 concepts demonstrated (simulated)
+A local web application that simulates Azure administration concepts covered by the AZ-104 exam. Everything runs on your computer. **Nothing connects to, logs into, or deploys to Microsoft Azure.**
 
-| Concept | Where it appears |
-|---|---|
-| Azure Policy definitions | `policies/policies.json` |
-| Deny effect | `allowedLocations`, `requireCostCenterTag` |
-| Audit effect | `auditStorageHttps` |
-| Modify effect | `modifyAddEnvironmentTag` |
-| Resource governance and tagging | Required `costCenter` tag and `environment` tag |
-| Compliance evaluation | `app/engine.py` |
+## Features
 
-## Limitations
+- **Dashboard:** counts of VMs by power state, storage accounts, containers, files, and recent activity.
+- **Policy Engine:** a list of simulated policies (Deny, Audit, Modify) and an evaluator that shows pass/fail per policy and the resource after Modify changes.
+- **Identity and Access:** an access check that uses group membership and scope inheritance to allow or deny an action, with the role assignment that applied.
+- **VM and Access Lab:** start, stop, and deallocate simulated VMs. Each action is checked by policy, then RBAC, then power-state rules. Results are saved in SQLite and survive restarts.
+- **Activity log:** every allowed and denied action is recorded.
+- **Storage (backend only):** storage accounts, containers, and validated file uploads stored in SQLite and on disk. There is no storage page yet.
+- **Reset Demo Data:** restores the original sample state after a confirmation dialog.
 
-- Simulates a small subset of Azure Policy. It does not implement the full policy language, initiatives, or remediation tasks.
-- Does not connect to Azure, Azure Resource Manager, or any subscription.
-- Uses a simplified operator set: `exists`, `equals`, `in`, `notIn`.
+## Public demo notice
 
-## Future improvements
+This is a shared demonstration environment. All visitors see and change the same data. Do not enter real or sensitive information. Data can reset at any time, and it resets when the server restarts on a free host.
 
-- Add policy initiatives and assignments
-- Add a compliance summary chart
-- Support more operators and nested conditions
+## Setup (Windows, PowerShell)
 
-## Phase 2: Local Azure Lab (simulated Entra ID, RBAC, and VMs)
+```
+python -m venv .venv
+.venv\Scripts\activate
+python -m pip install -r requirements.txt
+```
 
-Everything in this section is simulated with local JSON and Python. The app does not authenticate to or call Azure.
+## Run the app
 
-### Features
+```
+python -m uvicorn app.main:app --reload
+```
 
-- **Entra ID (simulated):** users and groups in `data/tenant.json`. Bob is a member of the `Ops-Team` group.
-- **RBAC:** role definitions (Owner, Contributor, Reader) and role assignments at subscription and resource group scopes. Access is inherited by child scopes. Unknown users are denied by default.
-- **Virtual machines:** start, stop, and deallocate actions, with power-state checks.
-- **Governance:** the Phase 1 policy engine runs before RBAC. A VM that violates a policy is denied.
-- **Activity log:** every allowed and denied action is recorded in `data/activity.json`, like the Azure Activity Log.
-- **Cost estimate:** only running VMs incur a compute charge in the simulation.
+Open http://127.0.0.1:8000 in your browser. The database `data/azure_adminlab.db` is created automatically with sample data.
 
-### AZ-104 mapping (simulated)
-
-| Concept | Where it appears |
-|---|---|
-| Entra ID users and groups | `data/tenant.json`, `expand_principals` in `app/rbac.py` |
-| RBAC role definitions | `roleDefinitions` in `data/tenant.json` |
-| Role assignments and scope inheritance | `scope_applies` and `check_access` in `app/rbac.py` |
-| Least privilege and deny by default | `check_access` returns False unless an assignment grants the action |
-| Azure Policy before action | `check_vm_policies` in `app/vm.py` |
-| VM power management | `perform_action` in `app/vm.py` |
-| Activity log and monitoring | `app/activity_log.py` |
-| Cost management | `monthly_cost` in `app/vm.py` |
-
-### Run the tests
+## Run the tests
 
 ```
 python -m pytest -v
 ```
 
-Expected result: 11 tests pass.
+Expected: 11 tests pass.
 
-### Viva questions (Phase 2)
+## Project structure
 
-- **Why does a group member get access?** The assignment is made to the group, and `expand_principals` adds the user's groups when checking access.
-- **Why is Bob denied on `vm-db-01`?** His Contributor role is scoped to `rg-web`, so it does not inherit down to `rg-data`.
-- **Why run policy before RBAC?** Governance rules apply regardless of who asks, as in Azure.
-- **Why is the VM state reset after a page reload?** The tenant file is read on each request and changes are kept in memory only. A real system would store state in a database.
+```
+azure-policy-engine/
+├── app/
+│   ├── main.py            # FastAPI routes
+│   ├── engine.py          # policy evaluation
+│   ├── rbac.py            # role and scope access checks
+│   ├── vm.py              # VM actions (policy, RBAC, power state)
+│   ├── activity_log.py    # older JSON activity helper (unused; replaced by storage.py)
+│   ├── storage.py         # SQLite persistence and storage functions
+│   └── templates/         # HTML pages sharing base.html
+├── data/
+│   ├── tenant.json        # seed users, groups, roles, VMs
+│   └── azure_adminlab.db  # created at runtime (not committed)
+├── policies/policies.json # policy definitions
+├── samples/               # compliant and non-compliant templates
+└── tests/                 # pytest tests
+```
+
+## Simulated vs real Azure
+
+| Concept | This project | Real Azure |
+|---|---|---|
+| Azure Policy | Simplified rules with Deny, Audit, Modify | Full policy language, assignments, remediation |
+| Entra ID users and groups | JSON seed data | Identity platform with real authentication |
+| RBAC | Three roles, two-level inheritance | Built-in and custom roles across many scopes |
+| Virtual machines | Power state changes only | Real compute, networking, and billing |
+| Storage | Local files and SQLite metadata | Blob service with SAS and tier management |
+| Activity log | Local database table | Azure Activity Log |
+
+## Limitations
+
+- No authentication: anyone with the URL can act as any simulated user.
+- Networking, monitoring, cost management, and lifecycle rules are not implemented yet.
+- The storage module has no web page; uploads are available through code only.
+- Data is local SQLite and resets when the server restarts on free hosting.
+- The policy language is a small subset of Azure Policy.
+
+## Future improvements
+
+- Storage page with upload, download, and tier changes
+- Virtual networks, subnets, and NSG connectivity checks
+- Metrics, alerts, budgets, and cost tables
+- Hosted database and deployment to a public host
 
 ## Author
 
