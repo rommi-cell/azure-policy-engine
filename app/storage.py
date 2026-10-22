@@ -65,6 +65,29 @@ def create_schema(conn):
             stored_path TEXT NOT NULL,
             FOREIGN KEY (account_name, container_name) REFERENCES containers(account_name, name) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS vnets (
+            name TEXT PRIMARY KEY,
+            resource_group TEXT NOT NULL,
+            address_space TEXT NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS subnets (
+            name TEXT NOT NULL,
+            vnet_name TEXT NOT NULL,
+            address_prefix TEXT NOT NULL,
+            nsg_name TEXT,
+            PRIMARY KEY (vnet_name, name),
+            FOREIGN KEY (vnet_name) REFERENCES vnets(name) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS nsg_rules (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nsg_name TEXT NOT NULL,
+            priority INTEGER NOT NULL,
+            direction TEXT NOT NULL,
+            protocol TEXT NOT NULL,
+            port TEXT NOT NULL,
+            access TEXT NOT NULL,
+            UNIQUE (nsg_name, priority, direction)
+        );
         """
     )
     conn.commit()
@@ -303,3 +326,70 @@ def reset_demo_data(conn, upload_dir=UPLOAD_DIR):
     # Recreate the demo storage account and container.
     create_storage_account(conn, "stdemo001", "rg-web")
     create_container(conn, "stdemo001", "uploads")
+
+
+def validate_subnet(vnet_range, subnet_range, existing_prefixes):
+    """Check a subnet prefix is inside the VNet and does not overlap existing subnets.
+
+    Returns a list of error messages; an empty list means the subnet is valid.
+    """
+    import ipaddress
+
+    errors = []
+    try:
+        vnet = ipaddress.ip_network(vnet_range, strict=True)
+        subnet = ipaddress.ip_network(subnet_range, strict=True)
+    except ValueError as exc:
+        return [f"Invalid address range: {exc}"]
+
+    if not subnet.subnet_of(vnet):
+        errors.append(f"{subnet} is not inside the VNet range {vnet}")
+
+    for prefix in existing_prefixes:
+        if subnet.overlaps(ipaddress.ip_network(prefix)):
+            errors.append(f"{subnet} overlaps existing subnet {prefix}")
+
+    return errors
+
+
+def create_vnet(conn, name, resource_group, address_space):
+    """Create a virtual network. The address space must be a valid CIDR block."""
+    import ipaddress
+
+    if not (2 <= len(name) <= 64):
+        raise ValueError("VNet name must be 2-64 characters")
+
+    try:
+        ipaddress.ip_network(address_space, strict=True)
+    except ValueError as exc:
+        raise ValueError(f"Invalid address space: {exc}") from exc
+
+    conn.execute(
+        "INSERT INTO vnets (name, resource_group, address_space) VALUES (?, ?, ?)",
+        (name, resource_group, address_space),
+    )
+    conn.commit()
+
+
+def create_subnet(conn, vnet_name, name, address_prefix, nsg_name=None):
+    """Create a subnet inside a VNet after validating its range."""
+    row = conn.execute("SELECT address_space FROM vnets WHERE name = ?", (vnet_name,)).fetchone()
+    if row is None:
+        raise ValueError(f"VNet '{vnet_name}' does not exist")
+
+    existing = [
+        r["address_prefix"]
+        for r in conn.execute(
+            "SELECT address_prefix FROM subnets WHERE vnet_name = ?", (vnet_name,)
+        ).fetchall()
+    ]
+
+    errors = validate_subnet(row["address_space"], address_prefix, existing)
+    if errors:
+        raise ValueError("; ".join(errors))
+
+    conn.execute(
+        "INSERT INTO subnets (name, vnet_name, address_prefix, nsg_name) VALUES (?, ?, ?, ?)",
+        (name, vnet_name, address_prefix, nsg_name),
+    )
+    conn.commit()
