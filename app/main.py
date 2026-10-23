@@ -17,6 +17,7 @@ from app.storage import (
     dashboard_summary,
     reset_demo_data,
 )
+from app.network import NsgRule, evaluate_nsg
 
 app = FastAPI(title="Azure Policy Engine (Local Simulation)")
 templates = Jinja2Templates(directory="app/templates")
@@ -168,7 +169,12 @@ ACCESS_SCOPES = [
 
 
 @app.get("/access", response_class=HTMLResponse)
-def access(request: Request, user: str = "", action: str = "read", scope: str = ACCESS_SCOPES[1]["value"]):
+def access(
+    request: Request,
+    user: str = "",
+    action: str = "read",
+    scope: str = ACCESS_SCOPES[1]["value"],
+):
     tenant = load_tenant()
     decision = None
     if user:
@@ -210,3 +216,77 @@ def reset(request: Request):
     finally:
         conn.close()
     return RedirectResponse(url="/dashboard", status_code=303)
+
+
+# -----------------------------------------------------------------------------
+# Networking (simulated VNets, subnets, and NSG connectivity check)
+# -----------------------------------------------------------------------------
+
+DEMO_NSG_RULES = [
+    NsgRule("allow-https", 100, "Inbound", "TCP", "443", "Allow"),
+    NsgRule("deny-all-inbound", 200, "Inbound", "*", "*", "Deny"),
+]
+
+
+def ensure_demo_network(conn):
+    """Create the demo VNet, subnets, and NSG rules if they are missing."""
+    from app.storage import create_vnet, create_subnet
+
+    exists = conn.execute("SELECT 1 FROM vnets WHERE name = 'vnet-demo'").fetchone()
+    if exists is None:
+        create_vnet(conn, "vnet-demo", "rg-web", "10.0.0.0/16")
+        create_subnet(conn, "vnet-demo", "subnet-web", "10.0.1.0/24", "nsg-web")
+        create_subnet(conn, "vnet-demo", "subnet-data", "10.0.2.0/24", "nsg-data")
+        for rule in DEMO_NSG_RULES:
+            conn.execute(
+                "INSERT OR IGNORE INTO nsg_rules (nsg_name, priority, direction, protocol, port, access) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                ("nsg-web", rule.priority, rule.direction, rule.protocol, rule.port, rule.access),
+            )
+        conn.commit()
+
+
+@app.get("/network", response_class=HTMLResponse)
+def network(
+    request: Request,
+    port: int = 443,
+    direction: str = "Inbound",
+    protocol: str = "TCP",
+):
+    conn = get_connection()
+    try:
+        ensure_demo_network(conn)
+        vnets = [dict(r) for r in conn.execute("SELECT * FROM vnets").fetchall()]
+        subnets = [dict(r) for r in conn.execute("SELECT * FROM subnets").fetchall()]
+        rule_rows = conn.execute(
+            "SELECT * FROM nsg_rules WHERE nsg_name = 'nsg-web' ORDER BY priority"
+        ).fetchall()
+        rules = [
+            NsgRule(
+                f"rule-{r['priority']}",
+                r["priority"],
+                r["direction"],
+                r["protocol"],
+                r["port"],
+                r["access"],
+            )
+            for r in rule_rows
+        ]
+    finally:
+        conn.close()
+
+    decision = evaluate_nsg(rules, direction, protocol, port)
+
+    return templates.TemplateResponse(
+        request,
+        "network.html",
+        {
+            "vnets": vnets,
+            "subnets": subnets,
+            "rules": rules,
+            "decision": decision,
+            "port": port,
+            "direction": direction,
+            "protocol": protocol,
+        },
+    )

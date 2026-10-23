@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Networking{% endblock %}
+{% block heading %}Networking (simulated VNets and NSG){% endblock %}
+{% set active = "network" %}
+
+{% block content %}
+  <div class="card">
+    <h2>Virtual networks and subnets</h2>
+    <table>
+      <tr><th>VNet</th><th>Address space</th><th>Subnet</th><th>Address prefix</th><th>NSG</th></tr>
+      {% for s in subnets %}
+      <tr>
+        <td>{{ s.vnet_name }}</td>
+        <td>{% for v in vnets if v.name == s.vnet_name %}{{ v.address_space }}{% endfor %}</td>
+        <td>{{ s.name }}</td>
+        <td>{{ s.address_prefix }}</td>
+        <td>{{ s.nsg_name or "none" }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>NSG rules (nsg-web)</h2>
+    <table>
+      <tr><th>Name</th><th>Priority</th><th>Direction</th><th>Protocol</th><th>Port</th><th>Access</th></tr>
+      {% for r in rules %}
+      <tr>
+        <td>{{ r.name }}</td>
+        <td>{{ r.priority }}</td>
+        <td>{{ r.direction }}</td>
+        <td>{{ r.protocol }}</td>
+        <td>{{ r.port }}</td>
+        <td><span class="badge {{ 'ok' if r.access == 'Allow' else 'bad' }}">{{ r.access }}</span></td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Test connectivity</h2>
+    <form method="get" action="/network">
+      <label>Direction
+        <select name="direction">
+          <option value="Inbound" {{ 'selected' if direction == 'Inbound' }}>Inbound</option>
+          <option value="Outbound" {{ 'selected' if direction == 'Outbound' }}>Outbound</option>
+        </select>
+      </label>
+      <label>Protocol
+        <select name="protocol">
+          <option value="TCP" {{ 'selected' if protocol == 'TCP' }}>TCP</option>
+          <option value="UDP" {{ 'selected' if protocol == 'UDP' }}>UDP</option>
+        </select>
+      </label>
+      <label>Port
+        <input type="number" name="port" value="{{ port }}" min="1" max="65535">
+      </label>
+      <button class="btn" type="submit">Test</button>
+    </form>
+
+    <div style="margin-top:16px;">
+      <span class="badge {{ 'ok' if decision.allowed else 'bad' }}">{{ 'Allowed' if decision.allowed else 'Blocked' }}</span>
+      <p>{{ decision.explanation }}</p>
+    </div>
+  </div>
+{% endblock %}
