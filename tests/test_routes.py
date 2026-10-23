@@ -100,3 +100,39 @@ def test_reset_restores_seed_state():
     assert response.status_code == 303
     dashboard = client.get("/dashboard").text
     assert "No activity" not in dashboard or "stop" not in dashboard
+
+
+def test_storage_page_loads():
+    response = client.get("/storage")
+    assert response.status_code == 200
+    assert "stdemo001" in response.text
+
+
+def test_storage_rejects_invalid_account_name():
+    response = client.post(
+        "/storage/account",
+        data={"name": "Bad Name", "resource_group": "rg-web"},
+    )
+    assert response.status_code == 200
+    assert "must be 3-24 lowercase letters or digits" in response.text
+
+
+def test_storage_upload_rejects_path_traversal():
+    response = client.post(
+        "/storage/upload",
+        data={"account": "stdemo001", "container": "uploads"},
+        files={"file": ("../evil.txt", b"x", "text/plain")},
+    )
+    assert response.status_code == 200
+    assert "must not contain path separators" in response.text
+
+
+def test_storage_upload_accepts_valid_txt():
+    response = client.post(
+        "/storage/upload",
+        data={"account": "stdemo001", "container": "uploads"},
+        files={"file": ("hello.txt", b"hello world", "text/plain")},
+    )
+    assert response.status_code == 200
+    assert "hello.txt" in response.text
+    assert "Hot" in response.text
