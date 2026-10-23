@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Storage{% endblock %}
+{% block heading %}Storage accounts (simulated){% endblock %}
+{% set active = "storage" %}
+
+{% block content %}
+  {% if message %}
+    <div class="notice {{ 'ok' if ok else 'bad' }}">{{ message }}</div>
+  {% endif %}
+
+  <div class="card">
+    <h2>Storage accounts</h2>
+    <table>
+      <tr><th>Account</th><th>Resource group</th><th>Public access</th><th>HTTPS only</th><th>Containers</th></tr>
+      {% for a in ctx.accounts %}
+      <tr>
+        <td><a href="/storage?account={{ a.name }}">{{ a.name }}</a></td>
+        <td>{{ a.resource_group }}</td>
+        <td><span class="badge {{ 'bad' if a.public_access else 'ok' }}">{{ 'Enabled' if a.public_access else 'Disabled' }}</span></td>
+        <td><span class="badge {{ 'ok' if a.https_only else 'bad' }}">{{ 'Yes' if a.https_only else 'No' }}</span></td>
+        <td>{{ a.container_count }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+    <form method="post" action="/storage/account" style="margin-top:14px;">
+      <input name="name" placeholder="account name (lowercase)" required>
+      <input name="resource_group" value="rg-web" required>
+      <button class="btn" type="submit">Create account</button>
+    </form>
+  </div>
+
+  {% if ctx.account %}
+  <div class="card">
+    <h2>Containers in {{ ctx.account }}</h2>
+    <p class="muted">Container: {{ ctx.container }}</p>
+    <form method="post" action="/storage/upload" enctype="multipart/form-data">
+      <input type="hidden" name="account" value="{{ ctx.account }}">
+      <input type="hidden" name="container" value="{{ ctx.container or (ctx.containers[0].name if ctx.containers else '') }}">
+      <input type="file" name="file" accept=".txt,.csv,.json,.log" required>
+      <button class="btn" type="submit">Upload file</button>
+    </form>
+    <p class="muted">Allowed types: .txt, .csv, .json, .log. Maximum size 1 MB.</p>
+  </div>
+
+  <div class="card">
+    <h2>Files in {{ ctx.container }}</h2>
+    <table>
+      <tr><th>File</th><th>Size (bytes)</th><th>Tier</th></tr>
+      {% for f in ctx.files %}
+      <tr>
+        <td>{{ f.file_name }}</td>
+        <td>{{ f.size_bytes }}</td>
+        <td><span class="badge info">{{ f.tier }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3" class="muted">No files yet. Upload one above.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+{% endblock %}

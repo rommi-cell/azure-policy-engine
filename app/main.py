@@ -1,5 +1,5 @@
 import json
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -16,6 +16,11 @@ from app.storage import (
     list_activity,
     dashboard_summary,
     reset_demo_data,
+    list_storage_accounts,
+    list_blobs,
+    create_storage_account,
+    create_container,
+    upload_blob,
 )
 from app.network import NsgRule, evaluate_nsg
 
@@ -289,4 +294,87 @@ def network(
             "direction": direction,
             "protocol": protocol,
         },
+    )
+
+
+# -----------------------------------------------------------------------------
+# Storage (simulated accounts, containers, and file uploads)
+# -----------------------------------------------------------------------------
+
+def storage_context(conn, account="", container=""):
+    accounts = list_storage_accounts(conn)
+    containers = []
+    files = []
+    if account:
+        containers = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT name FROM containers WHERE account_name = ? ORDER BY name",
+                (account,),
+            ).fetchall()
+        ]
+    if account and container:
+        files = list_blobs(conn, account, container)
+    return {
+        "accounts": accounts,
+        "containers": containers,
+        "files": files,
+        "account": account,
+        "container": container,
+    }
+
+
+@app.get("/storage", response_class=HTMLResponse)
+def storage_page(request: Request, account: str = "stdemo001", container: str = "uploads"):
+    conn = get_connection()
+    try:
+        ctx = storage_context(conn, account, container)
+    finally:
+        conn.close()
+    return templates.TemplateResponse(
+        request, "storage.html", {"ctx": ctx, "message": None, "ok": True}
+    )
+
+
+@app.post("/storage/account", response_class=HTMLResponse)
+async def storage_create_account(request: Request):
+    form = await request.form()
+    conn = get_connection()
+    try:
+        try:
+            create_storage_account(
+                conn, form.get("name", ""), form.get("resource_group", "rg-web")
+            )
+            message, ok = f"Storage account '{form.get('name')}' created.", True
+        except ValueError as exc:
+            message, ok = str(exc), False
+        ctx = storage_context(conn)
+    finally:
+        conn.close()
+    return templates.TemplateResponse(
+        request, "storage.html", {"ctx": ctx, "message": message, "ok": ok}
+    )
+
+
+@app.post("/storage/upload", response_class=HTMLResponse)
+async def storage_upload(request: Request, file: UploadFile = File(...)):
+    form = await request.form()
+    account = form.get("account", "")
+    container = form.get("container", "")
+    content = await file.read()
+    conn = get_connection()
+    try:
+        try:
+            info = upload_blob(conn, account, container, file.filename, content)
+            message, ok = (
+                f"Uploaded '{info['file_name']}' ({info['size_bytes']} bytes, tier {info['tier']}).",
+                True,
+            )
+        except ValueError as exc:
+            message, ok = str(exc), False
+        ctx = storage_context(conn, account, container)
+    finally:
+        conn.close()
+    return templates.TemplateResponse(
+        request, "storage.html", {"ctx": ctx, "message": message, "ok": ok}
     )
