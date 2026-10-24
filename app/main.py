@@ -21,6 +21,8 @@ from app.storage import (
     create_storage_account,
     create_container,
     upload_blob,
+    record_metric_sample,
+    set_cpu_threshold,
 )
 from app.network import NsgRule, evaluate_nsg
 
@@ -40,12 +42,7 @@ def index(request: Request):
     return templates.TemplateResponse(
         request,
         "index.html",
-        {
-            "policies": load_policies(),
-            "result": None,
-            "resource_text": "",
-            "error": None,
-        },
+        {"policies": load_policies(), "result": None, "resource_text": "", "error": None},
     )
 
 
@@ -66,12 +63,7 @@ async def evaluate(request: Request):
     return templates.TemplateResponse(
         request,
         "index.html",
-        {
-            "policies": policies,
-            "result": result,
-            "error": error,
-            "resource_text": resource_text,
-        },
+        {"policies": policies, "result": result, "error": error, "resource_text": resource_text},
     )
 
 
@@ -92,12 +84,7 @@ def lab(request: Request):
     return templates.TemplateResponse(
         request,
         "lab.html",
-        {
-            "users": tenant["users"],
-            "vms": vms,
-            "logs": logs,
-            "message": None,
-        },
+        {"users": tenant["users"], "vms": vms, "logs": logs, "message": None},
     )
 
 
@@ -120,9 +107,7 @@ async def lab_action(request: Request):
             if updated_vm:
                 save_vm_power_state(conn, vm_name, updated_vm["powerState"])
 
-        record_activity(
-            conn, user_id, action, vm_name, result["allowed"], result["message"]
-        )
+        record_activity(conn, user_id, action, vm_name, result["allowed"], result["message"])
 
         vms = load_vms(conn)
         logs = list_activity(conn, limit=10)
@@ -153,12 +138,7 @@ def dashboard(request: Request):
         summary = dashboard_summary(conn)
     finally:
         conn.close()
-
-    return templates.TemplateResponse(
-        request,
-        "dashboard.html",
-        {"summary": summary},
-    )
+    return templates.TemplateResponse(request, "dashboard.html", {"summary": summary})
 
 
 # -----------------------------------------------------------------------------
@@ -342,9 +322,7 @@ async def storage_create_account(request: Request):
     conn = get_connection()
     try:
         try:
-            create_storage_account(
-                conn, form.get("name", ""), form.get("resource_group", "rg-web")
-            )
+            create_storage_account(conn, form.get("name", ""), form.get("resource_group", "rg-web"))
             message, ok = f"Storage account '{form.get('name')}' created.", True
         except ValueError as exc:
             message, ok = str(exc), False
@@ -377,4 +355,46 @@ async def storage_upload(request: Request, file: UploadFile = File(...)):
         conn.close()
     return templates.TemplateResponse(
         request, "storage.html", {"ctx": ctx, "message": message, "ok": ok}
+    )
+
+
+# -----------------------------------------------------------------------------
+# Monitoring (simulated CPU metrics and alerts)
+# -----------------------------------------------------------------------------
+
+@app.get("/monitor", response_class=HTMLResponse)
+def monitor(request: Request, vm: str = "vm-web-01", threshold: int = 80, samples: int = 0):
+    conn = get_connection()
+    try:
+        message = None
+        ok = True
+        try:
+            set_cpu_threshold(conn, vm, threshold)
+        except ValueError as exc:
+            message, ok = str(exc), False
+
+        results = [record_metric_sample(conn, vm, t) for t in range(samples)]
+        history = [
+            dict(r)
+            for r in conn.execute(
+                "SELECT * FROM alert_history ORDER BY id DESC LIMIT 10"
+            ).fetchall()
+        ]
+        vm_names = [v["name"] for v in load_vms(conn)]
+    finally:
+        conn.close()
+
+    return templates.TemplateResponse(
+        request,
+        "monitor.html",
+        {
+            "vm": vm,
+            "threshold": threshold,
+            "samples": samples,
+            "results": results,
+            "history": history,
+            "vm_names": vm_names,
+            "message": message,
+            "ok": ok,
+        },
     )

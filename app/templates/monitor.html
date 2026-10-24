@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block title %}Monitoring{% endblock %}
+{% block heading %}Monitoring and alerts (simulated){% endblock %}
+{% set active = "monitor" %}
+
+{% block content %}
+  {% if message %}
+    <div class="notice {{ 'ok' if ok else 'bad' }}">{{ message }}</div>
+  {% endif %}
+
+  <div class="card">
+    <h2>Generate samples and set an alert threshold</h2>
+    <p class="muted">CPU values are deterministic simulated samples, not real telemetry. Severity is Warning at or above the threshold and Critical at 90 or more.</p>
+    <form method="get" action="/monitor">
+      <label>VM
+        <select name="vm">
+          {% for name in vm_names %}
+          <option value="{{ name }}" {{ 'selected' if name == vm }}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>CPU threshold (%)
+        <input type="number" name="threshold" value="{{ threshold }}" min="1" max="100">
+      </label>
+      <label>Samples
+        <input type="number" name="samples" value="{{ samples }}" min="0" max="50">
+      </label>
+      <button class="btn" type="submit">Run</button>
+    </form>
+  </div>
+
+  {% if results %}
+  <div class="card">
+    <h2>Samples for {{ vm }}</h2>
+    <table>
+      <tr><th>Tick</th><th>CPU %</th><th>Threshold</th><th>Severity</th></tr>
+      {% for r in results %}
+      <tr>
+        <td>{{ loop.index0 }}</td>
+        <td>{{ r.cpu }}</td>
+        <td>{{ r.threshold }}</td>
+        <td>
+          {% if r.severity %}
+          <span class="badge {{ 'bad' if r.severity == 'Critical' else 'warn' }}">{{ r.severity }}</span>
+          {% else %}
+          <span class="badge ok">OK</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <h2>Alert history (latest 10)</h2>
+    <table>
+      <tr><th>Time (UTC)</th><th>VM</th><th>CPU %</th><th>Threshold</th><th>Severity</th></tr>
+      {% for h in history %}
+      <tr>
+        <td>{{ h.time }}</td>
+        <td>{{ h.vm_name }}</td>
+        <td>{{ h.cpu_percent }}</td>
+        <td>{{ h.threshold }}</td>
+        <td><span class="badge {{ 'bad' if h.severity == 'Critical' else 'warn' }}">{{ h.severity }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="5" class="muted">No alerts yet. Run samples with a low threshold, such as 10, to create some.</td></tr>
+      {% endfor %}
+    </table>
+  </div>
+{% endblock %}

@@ -3,6 +3,7 @@
 Swapping to a hosted database later means changing this file only.
 """
 
+from datetime import datetime, timezone
 import json
 import sqlite3
 from pathlib import Path
@@ -87,6 +88,18 @@ def create_schema(conn):
             port TEXT NOT NULL,
             access TEXT NOT NULL,
             UNIQUE (nsg_name, priority, direction)
+        );
+        CREATE TABLE IF NOT EXISTS vm_alerts (
+            vm_name TEXT PRIMARY KEY,
+            cpu_threshold INTEGER NOT NULL DEFAULT 80
+        );
+        CREATE TABLE IF NOT EXISTS alert_history (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            time TEXT NOT NULL,
+            vm_name TEXT NOT NULL,
+            cpu_percent INTEGER NOT NULL,
+            threshold INTEGER NOT NULL,
+            severity TEXT NOT NULL
         );
         """
     )
@@ -254,8 +267,6 @@ def save_vm_power_state(conn, vm_name, power_state):
 
 def record_activity(conn, user_id, action, target, allowed, message):
     """Save one allowed or denied action to the activity table."""
-    from datetime import datetime, timezone
-
     conn.execute(
         "INSERT INTO activity (time, user_id, action, target, result, message) VALUES (?, ?, ?, ?, ?, ?)",
         (
@@ -303,13 +314,15 @@ def dashboard_summary(conn):
 def reset_demo_data(conn, upload_dir=UPLOAD_DIR):
     """Restore the public demo to its original sample state.
 
-    Clears runtime data (uploads, container and file metadata, activity) and
-    reloads VM states from tenant.json. Storage accounts created by visitors
-    are removed; the demo storage account is recreated.
+    Clears runtime data (uploads, container and file metadata, activity, and
+    alert settings) and reloads VM states from tenant.json. Storage accounts
+    created by visitors are removed; the demo storage account is recreated.
     """
     conn.execute("DELETE FROM blobs")
     conn.execute("DELETE FROM containers")
     conn.execute("DELETE FROM storage_accounts")
+    conn.execute("DELETE FROM alert_history")
+    conn.execute("DELETE FROM vm_alerts")
     conn.commit()
 
     # Remove uploaded files from disk so metadata and files stay in sync.
@@ -391,5 +404,42 @@ def create_subnet(conn, vnet_name, name, address_prefix, nsg_name=None):
     conn.execute(
         "INSERT INTO subnets (name, vnet_name, address_prefix, nsg_name) VALUES (?, ?, ?, ?)",
         (name, vnet_name, address_prefix, nsg_name),
+    )
+    conn.commit()
+
+
+def generate_cpu_sample(vm_name, tick):
+    """Deterministic simulated CPU percentage (0-100) for a VM at a given tick.
+
+    Not real telemetry: the value is derived from the VM name and tick so the
+    demo is repeatable.
+    """
+    seed = sum(ord(ch) for ch in vm_name) + tick * 17
+    return (seed * 37) % 101
+
+
+def record_metric_sample(conn, vm_name, tick):
+    """Compute a sample, store it if it crosses the VM's threshold, and return it."""
+    row = conn.execute("SELECT cpu_threshold FROM vm_alerts WHERE vm_name = ?", (vm_name,)).fetchone()
+    threshold = row["cpu_threshold"] if row else 80
+    cpu = generate_cpu_sample(vm_name, tick)
+    severity = "Critical" if cpu >= 90 else ("Warning" if cpu >= threshold else None)
+    if severity:
+        conn.execute(
+            "INSERT INTO alert_history (time, vm_name, cpu_percent, threshold, severity) VALUES (?, ?, ?, ?, ?)",
+            (datetime.now(timezone.utc).isoformat(timespec="seconds"), vm_name, cpu, threshold, severity),
+        )
+        conn.commit()
+    return {"vm": vm_name, "cpu": cpu, "threshold": threshold, "severity": severity}
+
+
+def set_cpu_threshold(conn, vm_name, threshold):
+    """Set the CPU alert threshold for one VM (1-100)."""
+    if not (1 <= int(threshold) <= 100):
+        raise ValueError("Threshold must be between 1 and 100")
+    conn.execute(
+        "INSERT INTO vm_alerts (vm_name, cpu_threshold) VALUES (?, ?) "
+        "ON CONFLICT(vm_name) DO UPDATE SET cpu_threshold = excluded.cpu_threshold",
+        (vm_name, int(threshold)),
     )
     conn.commit()
