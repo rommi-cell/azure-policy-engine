@@ -6,13 +6,19 @@ from app.storage import initialize_database, get_connection, reset_demo_data
 client = TestClient(app)
 
 
+def login_as(user_id="u-bob", password="demo-bob-123"):
+    """Sign in through the real login route so the session cookie is set."""
+    client.post("/login", data={"user": user_id, "password": password}, follow_redirects=False)
+
+
 def setup_function():
-    # Start every test from the seeded demo state.
+    # Start every test from the seeded demo state, signed in as Bob.
     conn = get_connection()
     try:
         reset_demo_data(conn)
     finally:
         conn.close()
+    login_as()
 
 
 def test_policy_page_loads():
@@ -136,3 +142,21 @@ def test_storage_upload_accepts_valid_txt():
     assert response.status_code == 200
     assert "hello.txt" in response.text
     assert "Hot" in response.text
+
+
+def test_protected_page_redirects_when_signed_out():
+    client.post("/logout", follow_redirects=False)
+    response = client.get("/dashboard", follow_redirects=False)
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
+
+
+def test_wrong_password_is_rejected():
+    client.post("/logout", follow_redirects=False)
+    response = client.post(
+        "/login",
+        data={"user": "u-bob", "password": "wrong"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 401
+    assert "Wrong user or password." in response.text

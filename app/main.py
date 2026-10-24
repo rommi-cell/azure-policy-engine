@@ -1,9 +1,12 @@
 import json
-from fastapi import FastAPI, Request, UploadFile, File
+import os
+from fastapi import Depends, FastAPI, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.sessions import SessionMiddleware
 
 # Local Module Imports
+from app.auth import verify_password
 from app.engine import load_policies, evaluate_resource
 from app.rbac import load_tenant, check_access, expand_principals
 from app.vm import perform_action
@@ -27,18 +30,74 @@ from app.storage import (
 from app.network import NsgRule, evaluate_nsg
 
 app = FastAPI(title="Azure Policy Engine (Local Simulation)")
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.environ.get("ADMINLAB_SECRET_KEY", "dev-only-insecure-key"),
+)
 templates = Jinja2Templates(directory="app/templates")
 
 # Ensure database schema is created and seeded on startup
 initialize_database()
 
 
+class LoginRequired(Exception):
+    """Raised when a protected page is requested without a signed-in session."""
+
+
+@app.exception_handler(LoginRequired)
+async def login_required_handler(request: Request, exc: LoginRequired):
+    return RedirectResponse(url="/login", status_code=303)
+
+
+def require_login(request: Request):
+    """Dependency: stop anonymous visitors from reaching a protected page."""
+    if not request.session.get("user"):
+        raise LoginRequired()
+    return request.session["user"]
+
+
 # -----------------------------------------------------------------------------
-# Policy Engine Routes (Phase 1)
+# Login and logout (public)
+# -----------------------------------------------------------------------------
+
+@app.get("/login", response_class=HTMLResponse)
+def login_page(request: Request):
+    tenant = load_tenant()
+    return templates.TemplateResponse(
+        request, "login.html", {"users": tenant["users"], "error": None}
+    )
+
+
+@app.post("/login")
+async def login_submit(request: Request):
+    form = await request.form()
+    user_id = form.get("user", "")
+    password = form.get("password", "")
+    tenant = load_tenant()
+    user = next((u for u in tenant["users"] if u["id"] == user_id), None)
+    if user is None or not verify_password(password, user.get("passwordHash", "")):
+        return templates.TemplateResponse(
+            request,
+            "login.html",
+            {"users": tenant["users"], "error": "Wrong user or password."},
+            status_code=401,
+        )
+    request.session["user"] = user_id
+    return RedirectResponse(url="/dashboard", status_code=303)
+
+
+@app.post("/logout")
+def logout(request: Request):
+    request.session.clear()
+    return RedirectResponse(url="/login", status_code=303)
+
+
+# -----------------------------------------------------------------------------
+# Policy Engine Routes (protected)
 # -----------------------------------------------------------------------------
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request):
+def index(request: Request, _user=Depends(require_login)):
     return templates.TemplateResponse(
         request,
         "index.html",
@@ -47,7 +106,7 @@ def index(request: Request):
 
 
 @app.post("/evaluate", response_class=HTMLResponse)
-async def evaluate(request: Request):
+async def evaluate(request: Request, _user=Depends(require_login)):
     form = await request.form()
     resource_text = form.get("resource", "")
     policies = load_policies()
@@ -68,11 +127,11 @@ async def evaluate(request: Request):
 
 
 # -----------------------------------------------------------------------------
-# RBAC & VM Lab Simulation Routes (Database-backed)
+# RBAC & VM Lab Simulation Routes (protected)
 # -----------------------------------------------------------------------------
 
 @app.get("/lab", response_class=HTMLResponse)
-def lab(request: Request):
+def lab(request: Request, _user=Depends(require_login)):
     tenant = load_tenant()
     conn = get_connection()
     try:
@@ -89,7 +148,7 @@ def lab(request: Request):
 
 
 @app.post("/lab/action", response_class=HTMLResponse)
-async def lab_action(request: Request):
+async def lab_action(request: Request, _user=Depends(require_login)):
     form = await request.form()
     user_id = form.get("user")
     vm_name = form.get("vm")
@@ -128,11 +187,11 @@ async def lab_action(request: Request):
 
 
 # -----------------------------------------------------------------------------
-# Dashboard Route
+# Dashboard (protected)
 # -----------------------------------------------------------------------------
 
 @app.get("/dashboard", response_class=HTMLResponse)
-def dashboard(request: Request):
+def dashboard(request: Request, _user=Depends(require_login)):
     conn = get_connection()
     try:
         summary = dashboard_summary(conn)
@@ -142,7 +201,7 @@ def dashboard(request: Request):
 
 
 # -----------------------------------------------------------------------------
-# Identity and Access Route
+# Identity and Access (protected)
 # -----------------------------------------------------------------------------
 
 ACCESS_ACTIONS = ["read", "start", "stop", "deallocate", "assignRoles"]
@@ -159,6 +218,7 @@ def access(
     user: str = "",
     action: str = "read",
     scope: str = ACCESS_SCOPES[1]["value"],
+    _user=Depends(require_login),
 ):
     tenant = load_tenant()
     decision = None
@@ -190,11 +250,11 @@ def access(
 
 
 # -----------------------------------------------------------------------------
-# Reset Demo Data
+# Reset Demo Data (protected)
 # -----------------------------------------------------------------------------
 
 @app.post("/reset")
-def reset(request: Request):
+def reset(request: Request, _user=Depends(require_login)):
     conn = get_connection()
     try:
         reset_demo_data(conn)
@@ -204,7 +264,7 @@ def reset(request: Request):
 
 
 # -----------------------------------------------------------------------------
-# Networking (simulated VNets, subnets, and NSG connectivity check)
+# Networking (protected)
 # -----------------------------------------------------------------------------
 
 DEMO_NSG_RULES = [
@@ -237,6 +297,7 @@ def network(
     port: int = 443,
     direction: str = "Inbound",
     protocol: str = "TCP",
+    _user=Depends(require_login),
 ):
     conn = get_connection()
     try:
@@ -278,7 +339,7 @@ def network(
 
 
 # -----------------------------------------------------------------------------
-# Storage (simulated accounts, containers, and file uploads)
+# Storage (protected)
 # -----------------------------------------------------------------------------
 
 def storage_context(conn, account="", container=""):
@@ -305,7 +366,12 @@ def storage_context(conn, account="", container=""):
 
 
 @app.get("/storage", response_class=HTMLResponse)
-def storage_page(request: Request, account: str = "stdemo001", container: str = "uploads"):
+def storage_page(
+    request: Request,
+    account: str = "stdemo001",
+    container: str = "uploads",
+    _user=Depends(require_login),
+):
     conn = get_connection()
     try:
         ctx = storage_context(conn, account, container)
@@ -317,7 +383,7 @@ def storage_page(request: Request, account: str = "stdemo001", container: str = 
 
 
 @app.post("/storage/account", response_class=HTMLResponse)
-async def storage_create_account(request: Request):
+async def storage_create_account(request: Request, _user=Depends(require_login)):
     form = await request.form()
     conn = get_connection()
     try:
@@ -335,7 +401,11 @@ async def storage_create_account(request: Request):
 
 
 @app.post("/storage/upload", response_class=HTMLResponse)
-async def storage_upload(request: Request, file: UploadFile = File(...)):
+async def storage_upload(
+    request: Request,
+    file: UploadFile = File(...),
+    _user=Depends(require_login),
+):
     form = await request.form()
     account = form.get("account", "")
     container = form.get("container", "")
@@ -359,11 +429,17 @@ async def storage_upload(request: Request, file: UploadFile = File(...)):
 
 
 # -----------------------------------------------------------------------------
-# Monitoring (simulated CPU metrics and alerts)
+# Monitoring (protected)
 # -----------------------------------------------------------------------------
 
 @app.get("/monitor", response_class=HTMLResponse)
-def monitor(request: Request, vm: str = "vm-web-01", threshold: int = 80, samples: int = 0):
+def monitor(
+    request: Request,
+    vm: str = "vm-web-01",
+    threshold: int = 80,
+    samples: int = 0,
+    _user=Depends(require_login),
+):
     conn = get_connection()
     try:
         message = None

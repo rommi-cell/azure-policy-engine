@@ -4,9 +4,24 @@
     "simulated": true
   },
   "users": [
-    {"id": "u-alice", "name": "Alice", "upn": "alice@contoso-local.example"},
-    {"id": "u-bob", "name": "Bob", "upn": "bob@contoso-local.example"},
-    {"id": "u-carol", "name": "Carol", "upn": "carol@contoso-local.example"}
+    {
+      "id": "u-alice",
+      "name": "Alice",
+      "upn": "alice@contoso-local.example",
+      "passwordHash": "52118f5ca7d32e717d79065445c52d6d$4561cda6fdf94d85205126213864ae2aab6694fa8f01d1556a12217ecd940349"
+    },
+    {
+      "id": "u-bob",
+      "name": "Bob",
+      "upn": "bob@contoso-local.example",
+      "passwordHash": "b0224a6905a56e74b5c00bf66dcfe574$66932fd912a8ec21d675a8472c33d3bd83d5bbd81e9e7fccbdd3ff6589110c8f"
+    },
+    {
+      "id": "u-carol",
+      "name": "Carol",
+      "upn": "carol@contoso-local.example",
+      "passwordHash": "05225962c1cc4ddd0945f30b39bb61b8$1fbae83c849d88ad052c14ec77a3b7a61d33da7fa545cf7c4b09fbc2d5bdb5a1"
+    }
   ],
   "groups": [
     {"id": "g-ops", "name": "Ops-Team", "members": ["u-bob"]}

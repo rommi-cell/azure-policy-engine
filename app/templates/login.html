@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Sign in{% endblock %}
+{% block heading %}Sign in (demo){% endblock %}
+{% set active = "login" %}
+
+{% block content %}
+  {% if error %}
+    <div class="notice bad">{{ error }}</div>
+  {% endif %}
+
+  <div class="card">
+    <h2>Choose a demo user</h2>
+    <p class="muted">Demo only. Anyone who visits can sign in as any of these users. Do not use real credentials.</p>
+    <form method="post" action="/login">
+      <label>User
+        <select name="user">
+          {% for u in users %}
+          <option value="{{ u.id }}">{{ u.name }} ({{ u.id }})</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Password
+        <input type="password" name="password" required>
+      </label>
+      <button class="btn" type="submit">Sign in</button>
+    </form>
+  </div>
+{% endblock %}
