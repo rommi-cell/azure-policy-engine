@@ -56,6 +56,12 @@
 <body>
   <nav class="sidebar">
     <div class="brand">Azure AdminLab</div>
+    {% set me = current_user(request) %}
+    {% if me %}
+    <div style="padding: 0 20px 16px; font-size: 13px; color: #9ca3af;">
+      Signed in as<br><strong style="color:#fff;">{{ me.name }}</strong> ({{ me.id }})
+    </div>
+    {% endif %}
     <a href="/dashboard" class="{% if active == 'dashboard' %}active{% endif %}">Dashboard</a>
     <a href="/" class="{% if active == 'policy' %}active{% endif %}">Policy Engine</a>
     <a href="/access" class="{% if active == 'access' %}active{% endif %}">Identity and Access</a>
@@ -63,6 +69,13 @@
     <a href="/lab" class="{% if active == 'lab' %}active{% endif %}">VM and Access Lab</a>
     <a href="/storage" class="{% if active == 'storage' %}active{% endif %}">Storage</a>
     <a href="/monitor" class="{% if active == 'monitor' %}active{% endif %}">Monitoring</a>
+    {% if me %}
+    <form method="post" action="/logout" style="padding: 16px 20px;">
+      <button type="submit" class="btn" style="width:100%; background:#374151;">Sign out</button>
+    </form>
+    {% else %}
+    <a href="/login">Sign in</a>
+    {% endif %}
   </nav>
   <div class="main">
     <div class="topbar">

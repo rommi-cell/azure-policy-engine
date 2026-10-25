@@ -36,6 +36,17 @@ app.add_middleware(
 )
 templates = Jinja2Templates(directory="app/templates")
 
+
+def _current_user(request: Request):
+    user_id = request.session.get("user")
+    if not user_id:
+        return None
+    tenant = load_tenant()
+    return next((u for u in tenant["users"] if u["id"] == user_id), None)
+
+
+templates.env.globals["current_user"] = _current_user
+
 # Ensure database schema is created and seeded on startup
 initialize_database()
 
