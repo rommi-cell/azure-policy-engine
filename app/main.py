@@ -161,7 +161,7 @@ def lab(request: Request, _user=Depends(require_login)):
 @app.post("/lab/action", response_class=HTMLResponse)
 async def lab_action(request: Request, _user=Depends(require_login)):
     form = await request.form()
-    user_id = form.get("user")
+    user_id = request.session.get("user")
     vm_name = form.get("vm")
     action = form.get("action")
 

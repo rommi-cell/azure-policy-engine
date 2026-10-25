@@ -58,11 +58,15 @@ def test_bob_can_stop_web_vm_and_change_persists():
 
 
 def test_carol_cannot_stop_vm():
+    # Sign in as Carol; the form's user field must be ignored.
+    client.post("/logout", follow_redirects=False)
+    login_as("u-carol", "demo-carol-123")
     response = client.post(
         "/lab/action",
-        data={"user": "u-carol", "vm": "vm-web-01", "action": "stop"},
+        data={"user": "u-bob", "vm": "vm-web-01", "action": "stop"},
     )
     assert "Denied by RBAC" in response.text
+    assert "u-carol" in response.text
 
 
 def test_access_page_allows_bob_via_group():
@@ -160,3 +164,16 @@ def test_wrong_password_is_rejected():
     )
     assert response.status_code == 401
     assert "Wrong user or password." in response.text
+
+
+def test_form_user_id_cannot_impersonate_another_user():
+    client.post("/logout", follow_redirects=False)
+    login_as("u-carol", "demo-carol-123")
+    client.post(
+        "/lab/action",
+        data={"user": "u-alice", "vm": "vm-web-01", "action": "stop"},
+    )
+    # Carol is recorded, Alice is not.
+    log = client.get("/lab").text
+    assert "u-carol" in log
+    assert "u-alice" not in log.split("Activity log")[1]
